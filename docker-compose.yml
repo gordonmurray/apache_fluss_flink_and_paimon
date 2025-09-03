@@ -1,0 +1,55 @@
+
+services:
+  zookeeper:
+    image: zookeeper:3.9.2
+    container_name: zk
+    restart: unless-stopped
+
+  coordinator-server:
+    image: fluss/fluss:0.7.0
+    container_name: fluss-coordinator
+    command: coordinatorServer
+    depends_on:
+      - zookeeper
+    environment:
+      - |
+        FLUSS_PROPERTIES=
+        zookeeper.address: zookeeper:2181
+        bind.listeners: FLUSS://coordinator-server:9123
+
+  tablet-server:
+    image: fluss/fluss:0.7.0
+    container_name: fluss-tablet
+    command: tabletServer
+    depends_on:
+      - coordinator-server
+    environment:
+      - |
+        FLUSS_PROPERTIES=
+        zookeeper.address: zookeeper:2181
+        bind.listeners: FLUSS://tablet-server:9123
+        data.dir: /tmp/fluss/data
+        remote.data.dir: /tmp/fluss/remote-data
+
+  jobmanager:
+    image: fluss/quickstart-flink:1.20-0.7.0
+    container_name: flink-jobmanager
+    command: jobmanager
+    ports:
+      - "8083:8081"   # Flink Web UI
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+
+  taskmanager:
+    image: fluss/quickstart-flink:1.20-0.7.0
+    container_name: flink-taskmanager
+    command: taskmanager
+    depends_on:
+      - jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
