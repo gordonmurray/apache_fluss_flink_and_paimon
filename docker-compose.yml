@@ -1,5 +1,39 @@
 
 services:
+  # MinIO S3-compatible storage for Paimon
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set minio http://minio:9000 admin password123;
+      /usr/bin/mc mb --ignore-existing minio/warehouse;
+      /usr/bin/mc mb --ignore-existing minio/checkpoints;
+      echo 'MinIO buckets created successfully';
+      "
+
   zookeeper:
     image: zookeeper:3.9.2
     container_name: zk
@@ -32,7 +66,7 @@ services:
         remote.data.dir: /tmp/fluss/remote-data
 
   jobmanager:
-    image: fluss/quickstart-flink:1.20-0.7.0
+    build: .
     container_name: flink-jobmanager
     command: jobmanager
     ports:
@@ -41,15 +75,35 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
+    volumes:
+      - ./conf:/opt/flink/conf
+    depends_on:
+      - minio-init
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   taskmanager:
-    image: fluss/quickstart-flink:1.20-0.7.0
+    build: .
     container_name: flink-taskmanager
     command: taskmanager
     depends_on:
-      - jobmanager
+      jobmanager:
+        condition: service_healthy
     environment:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
         taskmanager.numberOfTaskSlots: 4
+    volumes:
+      - ./conf:/opt/flink/conf
+
+volumes:
+  minio_data:
+    driver: local
+
+networks:
+  default:
+    name: fluss-paimon-network
