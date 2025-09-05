@@ -1,6 +1,7 @@
 blob.server.port: 6124
 s3.path-style-access: true
 taskmanager.memory.process.size: 1728m
+metrics.reporter.prom.port: 9249
 logger.kafka.level: INFO
 jobmanager.rpc.address: jobmanager
 web.cancel.enable: true
@@ -16,4 +17,7 @@ s3.endpoint: http://minio:9000
 parallelism.default: 1
 taskmanager.numberOfTaskSlots: 4
 web.submit.enable: true
+metrics.reporters: prom
 logger.zookeeper.level: INFO
+metrics.reporter.prom.class: org.apache.flink.metrics.prometheus.PrometheusReporter
+metrics.reporter.prom.host: 0.0.0.0
