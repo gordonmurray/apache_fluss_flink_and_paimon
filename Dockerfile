@@ -15,3 +15,6 @@ RUN chown flink:flink /opt/flink/lib/paimon-*.jar /opt/flink/lib/flink-shaded-ha
 
 # Verify JARs were downloaded
 RUN ls -la /opt/flink/lib/paimon-* /opt/flink/lib/flink-shaded-hadoop-*
+
+# Ensure Prometheus plugin is properly set up
+RUN chown -R flink:flink /opt/flink/plugins/metrics-prometheus/
