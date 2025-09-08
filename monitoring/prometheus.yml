@@ -21,7 +21,7 @@ scrape_configs:
       - targets: ['jobmanager:9249']
     scrape_interval: 30s
 
-  # Flink TaskManager metrics  
+  # Flink TaskManager metrics
   - job_name: 'flink-taskmanager'
     static_configs:
       - targets: ['taskmanager:9249']
