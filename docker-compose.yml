@@ -92,7 +92,7 @@ services:
     container_name: flink-taskmanager
     command: taskmanager
     ports:
-      - "9250:9249"   # Prometheus metrics (different port to avoid conflict)
+      - "9249:9249"   # Prometheus metrics
     depends_on:
       jobmanager:
         condition: service_healthy
