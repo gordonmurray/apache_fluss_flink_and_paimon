@@ -1,0 +1,73 @@
+{
+  "id": null,
+  "title": "Flink Monitoring",
+  "tags": ["flink"],
+  "style": "dark",
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Job Manager CPU Usage",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "flink_jobmanager_Status_JVM_CPU_Load",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Task Manager CPU Usage",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "flink_taskmanager_Status_JVM_CPU_Load",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "flink_jobmanager_Status_JVM_Memory_Heap_Used",
+          "refId": "A",
+          "legendFormat": "JobManager Heap"
+        },
+        {
+          "expr": "flink_taskmanager_Status_JVM_Memory_Heap_Used",
+          "refId": "B",
+          "legendFormat": "TaskManager Heap"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    }
+  ],
+  "schemaVersion": 27,
+  "version": 1
+}

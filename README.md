@@ -1,45 +1,119 @@
-# apache_fluss_flink_and_paimon
-A small project to use and learn Apache Fluss, with Apache Flink and Apache Paimon
+# Fluss, Flink and Paimon Demo
 
-This project integrates Apache Fluss (stream-batch unified storage) with Apache Paimon (data lake storage) using Apache Flink. This allows you to:
-- Use Fluss for real-time stream processing with primary key queries
-- Use Paimon for analytics queries on non-primary key fields
-- Transfer data between the two systems seamlessly
+A self-contained Docker Compose environment for learning how Apache Fluss, Apache Flink and Apache Paimon work together. Start the stack, open a SQL client, and explore real-time ingestion alongside lakehouse analytics in under five minutes.
 
-## Services
-- **Fluss**: Stream-batch unified storage
-- **Paimon**: Data lake storage with S3 (MinIO)
-- **Flink**: Stream/batch processing engine
-- **MinIO**: S3-compatible object storage
-- **Zookeeper**: Coordination service
+**What this demonstrates:**
+
+- Ingest data into Fluss for fast primary-key lookups and real-time updates
+- Store data in Paimon on S3 (MinIO) for flexible analytics queries
+- Use Flink SQL as the unified query engine across both systems
+- Monitor the full stack with Prometheus and Grafana
+
+## Architecture
+
+```
+                  ┌──────────────┐
+                  │  ZooKeeper   │
+                  └──────┬───────┘
+                         │
+          ┌──────────────┼──────────────┐
+          │                             │
+  ┌───────┴────────┐         ┌─────────┴─────────┐
+  │ Fluss          │         │ Fluss             │
+  │ Coordinator    │         │ Tablet Server     │
+  └───────┬────────┘         └─────────┬─────────┘
+          │                            │
+          └──────────┬─────────────────┘
+                     │
+  ┌──────────────────┼──────────────────┐
+  │ Flink JobManager │ Flink TaskManager │
+  └──────────────────┼──────────────────┘
+                     │
+              ┌──────┴──────┐
+              │    MinIO    │
+              │ (S3 storage)│
+              └──────┬──────┘
+                     │
+        ┌────────────┼────────────┐
+        │ Prometheus │  Grafana   │
+        └────────────┴────────────┘
+```
+
+## Component Versions
+
+| Component  | Version | Role |
+|------------|---------|------|
+| Fluss      | 0.7.0   | Stream-batch unified storage with primary-key tables |
+| Flink      | 1.20    | SQL and stream/batch processing engine |
+| Paimon     | 1.2.0   | Data lake table format (JARs added at build time) |
+| MinIO      | latest  | S3-compatible object storage |
+| ZooKeeper  | 3.9.2   | Coordination service for Fluss |
+| Prometheus | 2.45.0  | Metrics collection |
+| Grafana    | 10.0.0  | Metrics dashboards |
+
+## Prerequisites
+
+- Docker Engine 20.10+ with Compose V2
+- Around 4 GB of free memory (the JVMs are the main consumers)
+- Ports 3000, 8083, 9000, 9001, 9090, 9249 and 9250 available on localhost
 
 ## Getting Started
 
-Start all services:
+Build and start all services:
+
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Access Flink SQL client:
+Wait for the healthchecks to pass (roughly 60 seconds), then verify:
+
+```bash
+docker compose ps
+```
+
+All containers should show `Up` (except `minio-init`, which exits after creating the S3 buckets).
+
+Open the Flink SQL client:
+
 ```bash
 docker exec -it flink-jobmanager /opt/flink/bin/sql-client.sh
 ```
 
-## Complete Step-by-Step Workflow
+To tear everything down, including volumes:
 
-### Step 1: Create Fluss Catalog and Table
+```bash
+docker compose down -v
+```
+
+## Web UIs
+
+| Service    | URL                        | Credentials     |
+|------------|----------------------------|-----------------|
+| Flink      | http://localhost:8083       | none            |
+| MinIO      | http://localhost:9001       | admin/password123 |
+| Prometheus | http://localhost:9090       | none            |
+| Grafana    | http://localhost:3000       | admin/admin     |
+
+![Flink Web UI](images/flink-web-ui.png)
+
+## Walkthrough
+
+The steps below run entirely inside the Flink SQL client. They create tables in both Fluss and Paimon, load sample data, and show how each system handles different query patterns.
+
+### 1. Set up the Fluss catalog
 
 ```sql
--- Create Fluss catalog
 CREATE CATALOG fluss_catalog WITH (
   'type' = 'fluss',
   'bootstrap.servers' = 'coordinator-server:9123'
 );
 
--- Switch to Fluss catalog
 USE CATALOG fluss_catalog;
+```
 
--- Create table in Fluss (optimized for primary key queries)
+### 2. Create a table and insert data into Fluss
+
+```sql
 CREATE TABLE logins (
   id STRING,
   username STRING,
@@ -48,35 +122,43 @@ CREATE TABLE logins (
   PRIMARY KEY (id) NOT ENFORCED
 );
 
--- Insert sample data into Fluss
 INSERT INTO logins VALUES
-  ('1','alice',TIMESTAMP '2025-09-03 09:00:00','10.0.0.5'),
-  ('2','bob',  TIMESTAMP '2025-09-03 09:05:00','10.0.0.8'),
-  ('3','alice',TIMESTAMP '2025-09-04 09:05:00','10.0.0.5');
+  ('1', 'alice', TIMESTAMP '2025-09-03 09:00:00', '10.0.0.5'),
+  ('2', 'bob',   TIMESTAMP '2025-09-03 09:05:00', '10.0.0.8'),
+  ('3', 'alice', TIMESTAMP '2025-09-04 09:05:00', '10.0.0.5');
+```
 
--- Query by primary key (efficient in Fluss)
+### 3. Query Fluss by primary key
+
+Fluss is optimised for primary-key lookups. Switch to batch mode and query by `id`:
+
+```sql
 SET 'sql-client.execution.result-mode' = 'tableau';
 SET 'execution.runtime-mode' = 'batch';
+
 SELECT * FROM logins WHERE id = '1';
 ```
 
-### Step 2: Create Paimon Catalog and Table
+### 4. Set up the Paimon catalog
+
+Paimon stores its tables as files on S3 (MinIO in this demo):
 
 ```sql
--- Create Paimon catalog
 CREATE CATALOG paimon_catalog WITH (
-    'type' = 'paimon',
-    'warehouse' = 's3://warehouse/',
-    's3.endpoint' = 'http://minio:9000',
-    's3.access-key' = 'admin',
-    's3.secret-key' = 'password123',
-    's3.path-style-access' = 'true'
+  'type' = 'paimon',
+  'warehouse' = 's3://warehouse/',
+  's3.endpoint' = 'http://minio:9000',
+  's3.access-key' = 'admin',
+  's3.secret-key' = 'password123',
+  's3.path-style-access' = 'true'
 );
 
--- Switch to Paimon catalog
 USE CATALOG paimon_catalog;
+```
 
--- Create table in Paimon (optimized for analytics queries)
+### 5. Create a Paimon table and load data
+
+```sql
 CREATE TABLE user_analytics (
   id STRING,
   username STRING,
@@ -84,114 +166,112 @@ CREATE TABLE user_analytics (
   ip STRING,
   PRIMARY KEY (id) NOT ENFORCED
 );
+
+INSERT INTO user_analytics VALUES
+  ('1', 'alice', TIMESTAMP '2025-09-03 09:00:00', '10.0.0.5'),
+  ('2', 'bob',   TIMESTAMP '2025-09-03 09:05:00', '10.0.0.8'),
+  ('3', 'alice', TIMESTAMP '2025-09-04 09:05:00', '10.0.0.5');
 ```
 
-### Step 3: Transfer Data from Fluss to Paimon
+> **Note:** In this demo the data is inserted manually into both catalogs.
+> In a production setup you would run a Flink streaming job to sync data
+> continuously from Fluss to Paimon.
 
-Due to Fluss limitations (only supports primary key queries in batch mode), use this manual approach:
+### 6. Run analytics queries on Paimon
+
+Paimon supports arbitrary filters and aggregations, not just primary-key lookups:
 
 ```sql
--- Switch to Paimon catalog
-USE CATALOG paimon_catalog;
-
--- Manually insert the data from Fluss into Paimon
--- (In a real scenario, you'd automate this via streaming jobs)
-INSERT INTO user_analytics VALUES
-  ('1','alice',TIMESTAMP '2025-09-03 09:00:00','10.0.0.5'),
-  ('2','bob',  TIMESTAMP '2025-09-03 09:05:00','10.0.0.8'),
-  ('3','alice',TIMESTAMP '2025-09-04 09:05:00','10.0.0.5');
-
--- Verify data was transferred
-SELECT * FROM user_analytics;
-
--- Now run analytics queries (efficient in Paimon)
-SELECT username, COUNT(*) as login_count, MAX(ts) as last_login
-FROM user_analytics 
+-- Logins per user
+SELECT username, COUNT(*) AS login_count, MAX(ts) AS last_login
+FROM user_analytics
 GROUP BY username;
 
--- Query by IP address (not efficient in Fluss, but works great in Paimon)
-SELECT * FROM user_analytics 
-WHERE ip = '10.0.0.5';
-
--- Query by date range
-SELECT * FROM user_analytics 
-WHERE ts >= TIMESTAMP '2025-09-04 00:00:00';
-```
-
-### Step 4: Querying Each System
-
-**Fluss** (Primary key queries only):
-```sql
-USE CATALOG fluss_catalog;
--- Only primary key queries work efficiently
-SELECT * FROM logins WHERE id = '1';
-```
-
-**Paimon** (Full analytics capabilities):
-```sql
-USE CATALOG paimon_catalog;
--- All query types work
-SELECT * FROM user_analytics WHERE username = 'alice';
+-- Filter by IP
 SELECT * FROM user_analytics WHERE ip = '10.0.0.5';
-SELECT username, COUNT(*) FROM user_analytics GROUP BY username;
+
+-- Filter by date range
+SELECT * FROM user_analytics WHERE ts >= TIMESTAMP '2025-09-04 00:00:00';
 ```
 
-### Step 5: Real-time Streaming (Advanced)
+### 7. Compare query patterns
 
-For production use, you'd set up streaming jobs to automatically sync data:
+| Query type | Fluss | Paimon |
+|---|---|---|
+| Lookup by primary key | Fast | Supported |
+| Filter on non-key columns | Not supported in batch mode | Fast |
+| Aggregations / GROUP BY | Not supported in batch mode | Fast |
+| Real-time upserts | Fast | Supported (via compaction) |
 
-```sql
--- Set streaming mode for real-time data transfer
-SET 'execution.runtime-mode' = 'streaming';
+## Monitoring
 
--- In practice, you'd need to:
--- 1. Enable datalake mode on Fluss tables
--- 2. Use Flink streaming jobs for automatic data transfer
--- 3. Set up proper schema evolution and conflict resolution
+Prometheus scrapes three targets:
+
+- **Flink JobManager** (port 9249) and **TaskManager** (port 9250) via the Prometheus metrics reporter
+- **MinIO** cluster metrics via `/minio/v2/metrics/cluster`
+
+Grafana ships with two pre-provisioned dashboards:
+
+- **Flink Monitoring** -- JVM CPU load and heap memory for both JobManager and TaskManager
+- **MinIO Monitoring** -- total and used storage, online server count, request rate and error rate
+
+![Grafana Flink Dashboard](images/grafana-flink-dashboard.png)
+
+![Grafana MinIO Dashboard](images/grafana-minio-dashboard.png)
+
+![Prometheus Targets](images/prometheus-targets.png)
+
+## Project Structure
+
 ```
-
-## Architecture Benefits
-
-- **Fluss**: Fast primary key lookups, real-time updates, stream processing
-- **Paimon**: Complex analytics, historical data, efficient non-primary key queries
-- **Combined**: Real-time operational queries + comprehensive analytics
+.
+├── conf/
+│   ├── flink-conf.yaml              # Flink configuration (S3, metrics, logging)
+│   └── log4j-console.properties     # Flink log4j config
+├── monitoring/
+│   ├── prometheus.yml               # Prometheus scrape targets
+│   └── grafana/
+│       └── provisioning/
+│           ├── dashboards/          # Grafana dashboard JSON files
+│           └── datasources/         # Prometheus datasource config
+├── docker-compose.yml               # All services
+├── Dockerfile                       # Flink image with Paimon and Hadoop JARs
+└── README.md
+```
 
 ## Troubleshooting
 
-### Common Issues:
+**S3 / MinIO connection errors**
 
-1. **StatusLogger Reconfiguration Error**: This is a harmless logging configuration warning that can be ignored.
+Check that MinIO is healthy and the buckets exist:
 
-2. **Cross-catalog queries fail**: 
-   - Current Fluss/Flink setup has limitations with cross-catalog references
-   - Use manual data transfer approach shown in Step 3
-   - Fluss only supports primary key queries in batch mode
+```bash
+docker compose ps minio
+docker compose exec minio mc ls local/warehouse
+```
 
-3. **"Object 'logins' not found within 'fluss_catalog'"**: 
-   - Cross-catalog references don't work in this setup
-   - Use separate INSERT statements for each catalog
+You can also browse buckets in the MinIO UI at http://localhost:9001.
 
-3. **S3 Connection Issues**: 
-   - Verify MinIO is healthy: `docker compose ps`
-   - Check MinIO UI at http://localhost:9001
-   - Ensure buckets are created: `minio/warehouse` and `minio/checkpoints`
+**Cross-catalog queries fail**
 
-### Useful Commands:
+Flink SQL does not support cross-catalog references like
+`SELECT * FROM fluss_catalog.default.logins` when issued from a different
+current catalog. Always `USE CATALOG <name>` before querying its tables.
+
+**Fluss only returns results for primary-key filters**
+
+This is expected. In batch mode, Fluss only supports queries that filter on
+the primary key. Use Paimon for scans, aggregations, and non-key filters.
+
+**Useful diagnostic commands**
 
 ```sql
--- List all catalogs
 SHOW CATALOGS;
-
--- List tables in current catalog
 SHOW TABLES;
 
--- Check Fluss catalog tables
 USE CATALOG fluss_catalog;
 SHOW TABLES;
 
--- Check Paimon catalog tables  
 USE CATALOG paimon_catalog;
 SHOW TABLES;
 ```
-
-
