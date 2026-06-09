@@ -41,11 +41,17 @@ services:
     restart: unless-stopped
 
   coordinator-server:
-    image: apache/fluss:0.9.1-incubating
+    build:
+      context: .
+      dockerfile: Dockerfile.fluss
+    image: fluss-paimon:local
     container_name: fluss-coordinator
     command: coordinatorServer
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
     environment:
       - |
         FLUSS_PROPERTIES=
@@ -53,13 +59,26 @@ services:
         bind.listeners: FLUSS://coordinator-server:9123
         metrics.reporters: prometheus
         metrics.reporter.prometheus.port: 9249
+        datalake.format: paimon
+        datalake.paimon.metastore: filesystem
+        datalake.paimon.warehouse: s3://warehouse/
+        datalake.paimon.s3.endpoint: http://minio:9000
+        datalake.paimon.s3.access-key: admin
+        datalake.paimon.s3.secret-key: password123
+        datalake.paimon.s3.path.style.access: true
 
   tablet-server:
-    image: apache/fluss:0.9.1-incubating
+    build:
+      context: .
+      dockerfile: Dockerfile.fluss
+    image: fluss-paimon:local
     container_name: fluss-tablet
     command: tabletServer
     depends_on:
-      - coordinator-server
+      coordinator-server:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
     environment:
       - |
         FLUSS_PROPERTIES=
@@ -69,6 +88,13 @@ services:
         remote.data.dir: /tmp/fluss/remote-data
         metrics.reporters: prometheus
         metrics.reporter.prometheus.port: 9249
+        datalake.format: paimon
+        datalake.paimon.metastore: filesystem
+        datalake.paimon.warehouse: s3://warehouse/
+        datalake.paimon.s3.endpoint: http://minio:9000
+        datalake.paimon.s3.access-key: admin
+        datalake.paimon.s3.secret-key: password123
+        datalake.paimon.s3.path.style.access: true
 
   jobmanager:
     build: .
