@@ -43,7 +43,7 @@ A self-contained Docker Compose environment for learning how Apache Fluss, Apach
 
 | Component  | Version | Role |
 |------------|---------|------|
-| Fluss      | 0.7.0   | Stream-batch unified storage with primary-key tables |
+| Fluss      | 0.9.1-incubating | Stream-batch unified storage with primary-key tables |
 | Flink      | 1.20    | SQL and stream/batch processing engine |
 | Paimon     | 1.2.0   | Data lake table format (JARs added at build time) |
 | MinIO      | RELEASE.2025-09-07T16-13-09Z | S3-compatible object storage |
@@ -51,6 +51,8 @@ A self-contained Docker Compose environment for learning how Apache Fluss, Apach
 | ZooKeeper  | 3.9.2   | Coordination service for Fluss |
 | Prometheus | 2.45.0  | Metrics collection |
 | Grafana    | 10.0.0  | Metrics dashboards |
+
+The demo runs on the official Apache Fluss 0.9.1 images (`apache/fluss` and `apache/fluss-quickstart-flink:1.20-0.9.1-incubating`) on Flink 1.20. Flink 2.2 is not adopted yet: the Fluss quickstart image is published for Flink 1.20, so moving to 2.2 needs a matching quickstart image and a Fluss connector validated on 2.2. Flink reads `conf/config.yaml` in the current standard format.
 
 ## Prerequisites
 
@@ -239,7 +241,7 @@ Grafana ships with three pre-provisioned dashboards:
 ```
 .
 ├── conf/
-│   ├── flink-conf.yaml              # Flink configuration (S3, metrics, logging)
+│   ├── config.yaml                  # Flink configuration (S3, metrics, logging)
 │   └── log4j-console.properties     # Flink log4j config
 ├── monitoring/
 │   ├── prometheus.yml               # Prometheus scrape targets
