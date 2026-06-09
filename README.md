@@ -216,14 +216,16 @@ SELECT * FROM user_analytics WHERE ts >= TIMESTAMP '2025-09-04 00:00:00';
 
 ## Monitoring
 
-Prometheus scrapes three targets:
+Prometheus scrapes these targets:
 
 - **Flink JobManager** (port 9249) and **TaskManager** (port 9250) via the Prometheus metrics reporter
+- **Fluss Coordinator** and **Tablet Server** (port 9249) via the Fluss Prometheus metrics reporter
 - **MinIO** cluster metrics via `/minio/v2/metrics/cluster`
 
-Grafana ships with two pre-provisioned dashboards:
+Grafana ships with three pre-provisioned dashboards:
 
 - **Flink Monitoring** -- JVM CPU load and heap memory for both JobManager and TaskManager
+- **Fluss Monitoring** -- cluster health (active tablet servers, tables, buckets, offline buckets), tablet server request rate, errors and latency, replica and leader counts, and coordinator JVM usage
 - **MinIO Monitoring** -- total and used storage, online server count, request rate and error rate
 
 ![Grafana Flink Dashboard](images/grafana-flink-dashboard.png)

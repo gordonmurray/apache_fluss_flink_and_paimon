@@ -1,0 +1,121 @@
+{
+  "id": null,
+  "title": "Fluss Monitoring",
+  "tags": ["fluss"],
+  "style": "dark",
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active Tablet Servers",
+      "type": "stat",
+      "targets": [
+        {"expr": "fluss_coordinator_activeTabletServerCount", "refId": "A"}
+      ],
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Tables",
+      "type": "stat",
+      "targets": [
+        {"expr": "fluss_coordinator_tableCount", "refId": "A"}
+      ],
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Buckets",
+      "type": "stat",
+      "targets": [
+        {"expr": "fluss_coordinator_bucketCount", "refId": "A"}
+      ],
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Offline Buckets",
+      "type": "stat",
+      "targets": [
+        {"expr": "fluss_coordinator_offlineBucketCount", "refId": "A"}
+      ],
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 1}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Tablet Server Requests / sec",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "fluss_tabletserver_request_requestsPerSecond", "refId": "A", "legendFormat": "requests/s"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "fieldConfig": {"defaults": {"unit": "reqps"}}
+    },
+    {
+      "id": 6,
+      "title": "Request Errors / sec",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "fluss_tabletserver_request_errorsPerSecond", "refId": "A", "legendFormat": "errors/s"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+    },
+    {
+      "id": 7,
+      "title": "Request Total Time (ms)",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "fluss_tabletserver_request_totalTimeMs", "refId": "A", "legendFormat": "total time ms"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "fieldConfig": {"defaults": {"unit": "ms"}}
+    },
+    {
+      "id": 8,
+      "title": "Replica and Leader Count",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "fluss_tabletserver_replicaCount", "refId": "A", "legendFormat": "replicas"},
+        {"expr": "fluss_tabletserver_leaderCount", "refId": "B", "legendFormat": "leaders"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+    },
+    {
+      "id": 9,
+      "title": "Coordinator Heap Used",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "fluss_coordinator_status_JVM_memory_heap_used", "refId": "A", "legendFormat": "coordinator heap"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    },
+    {
+      "id": 10,
+      "title": "Coordinator CPU Load",
+      "type": "stat",
+      "targets": [
+        {"expr": "fluss_coordinator_status_JVM_CPU_load", "refId": "A"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}}
+    }
+  ],
+  "schemaVersion": 27,
+  "version": 1
+}

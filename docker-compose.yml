@@ -51,6 +51,8 @@ services:
         FLUSS_PROPERTIES=
         zookeeper.address: zookeeper:2181
         bind.listeners: FLUSS://coordinator-server:9123
+        metrics.reporters: prometheus
+        metrics.reporter.prometheus.port: 9249
 
   tablet-server:
     image: fluss/fluss:0.7.0
@@ -65,6 +67,8 @@ services:
         bind.listeners: FLUSS://tablet-server:9123
         data.dir: /tmp/fluss/data
         remote.data.dir: /tmp/fluss/remote-data
+        metrics.reporters: prometheus
+        metrics.reporter.prometheus.port: 9249
 
   jobmanager:
     build: .
