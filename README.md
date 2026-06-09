@@ -46,7 +46,8 @@ A self-contained Docker Compose environment for learning how Apache Fluss, Apach
 | Fluss      | 0.7.0   | Stream-batch unified storage with primary-key tables |
 | Flink      | 1.20    | SQL and stream/batch processing engine |
 | Paimon     | 1.2.0   | Data lake table format (JARs added at build time) |
-| MinIO      | latest  | S3-compatible object storage |
+| MinIO      | RELEASE.2025-09-07T16-13-09Z | S3-compatible object storage |
+| MinIO Client (mc) | RELEASE.2025-08-13T08-35-41Z | Creates the S3 buckets on startup |
 | ZooKeeper  | 3.9.2   | Coordination service for Fluss |
 | Prometheus | 2.45.0  | Metrics collection |
 | Grafana    | 10.0.0  | Metrics dashboards |
