@@ -86,6 +86,16 @@ To tear everything down, including volumes:
 docker compose down -v
 ```
 
+## Smoke Test
+
+To check the whole demo from a clean checkout in one command:
+
+```bash
+scripts/smoke-test.sh
+```
+
+It validates the Compose config, starts the stack, waits for the services to be healthy, runs the Fluss catalog walkthrough (create table, insert rows, primary-key lookup), and tears the stack down. It exits non-zero if a health check or the SQL validation fails. Set `KEEP_STACK=1` to leave the stack running for debugging.
+
 ## Web UIs
 
 | Service    | URL                        | Credentials     |
