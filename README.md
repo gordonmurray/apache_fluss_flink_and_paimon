@@ -107,7 +107,17 @@ It validates the Compose config, starts the stack, waits for the services to be 
 | Prometheus | http://localhost:9090       | none            |
 | Grafana    | http://localhost:3000       | admin/admin     |
 
+The Flink dashboard shows the running and completed jobs:
+
 ![Flink Web UI](images/flink-web-ui.png)
+
+A streaming insert into Paimon, shown as a Flink dataflow from the source through the bucket shuffle to the Paimon writer and committer:
+
+![Flink streaming job graph](images/flink-job-graph.png)
+
+The MinIO console shows the Paimon tables written into the `warehouse` bucket:
+
+![MinIO console with the Paimon warehouse](images/minio-console.png)
 
 ## Walkthrough
 
@@ -240,6 +250,8 @@ Grafana ships with three pre-provisioned dashboards:
 - **MinIO Monitoring** -- total and used storage, online server count, request rate and error rate
 
 ![Grafana Flink Dashboard](images/grafana-flink-dashboard.png)
+
+![Grafana Fluss Dashboard](images/grafana-fluss-dashboard.png)
 
 ![Grafana MinIO Dashboard](images/grafana-minio-dashboard.png)
 
