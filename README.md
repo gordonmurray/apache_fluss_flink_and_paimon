@@ -12,32 +12,49 @@ A self-contained Docker Compose environment for learning how Apache Fluss, Apach
 ## Architecture
 
 ```
-                  ┌──────────────┐
-                  │  ZooKeeper   │
-                  └──────┬───────┘
-                         │
-          ┌──────────────┼──────────────┐
-          │                             │
-  ┌───────┴────────┐         ┌─────────┴─────────┐
-  │ Fluss          │         │ Fluss             │
-  │ Coordinator    │         │ Tablet Server     │
-  └───────┬────────┘         └─────────┬─────────┘
-          │                            │
-          └──────────┬─────────────────┘
-                     │
-  ┌──────────────────┼──────────────────┐
-  │ Flink JobManager │ Flink TaskManager │
-  └──────────────────┼──────────────────┘
-                     │
-              ┌──────┴──────┐
-              │    MinIO    │
-              │ (S3 storage)│
-              └──────┬──────┘
-                     │
-        ┌────────────┼────────────┐
-        │ Prometheus │  Grafana   │
-        └────────────┴────────────┘
+                          ┌─────────────┐
+                          │  ZooKeeper  │   cluster coordination for Fluss
+                          └──────┬──────┘
+                                 │
+                 ┌───────────────┴───────────────┐
+                 │                               │
+         ┌───────┴────────┐             ┌────────┴───────┐
+         │ Fluss          │             │ Fluss Tablet   │──> Fluss remote storage
+         │ Coordinator    │             │ Server         │    (/tmp/fluss/remote-data)
+         └───────┬────────┘             └────────┬───────┘
+                 │                               │
+                 └───────────────┬───────────────┘
+                                 │  hot path: low-latency primary-key reads and writes
+                       ┌─────────┴──────────┐
+                       │ Flink JobManager + │   Flink SQL is the single query and
+                       │ Flink TaskManager  │   processing engine for both paths
+                       └─────────┬──────────┘
+                                 │  lake path: scans, filters, aggregations
+                       ┌─────────┴──────────┐
+                       │ MinIO (S3)         │   Paimon warehouse at s3://warehouse/
+                       └─────────┬──────────┘
+                                 │
+                      ┌──────────┴──────────┐
+                      │ Prometheus │ Grafana │   metrics collection and dashboards
+                      └──────────┴──────────┘
 ```
+
+### What each service does
+
+- **ZooKeeper** coordinates the Fluss cluster (leader election and metadata).
+- **Fluss Coordinator** manages tables, buckets, and tablet assignment.
+- **Fluss Tablet Server** stores table data and serves low-latency primary-key reads and writes. Cold data is offloaded to Fluss remote storage (`/tmp/fluss/remote-data` in this demo).
+- **Flink JobManager and TaskManager** run Flink SQL, the single surface for querying and processing both Fluss and Paimon.
+- **MinIO** provides S3-compatible storage that holds the Paimon warehouse at `s3://warehouse/`.
+- **Prometheus and Grafana** collect and visualise metrics from Flink, Fluss, and MinIO.
+
+### Hot path, lake path, and union reads
+
+- **Hot path** -- write to and read from Fluss for sub-second primary-key lookups and updates.
+- **Lake path** -- the same data lives as Paimon tables on S3 for scans, filters, aggregations, and snapshot/time-travel queries.
+- **Union reads** -- a datalake-enabled Fluss table is tiered into Paimon automatically by the Lakehouse Tiering Service, and Fluss exposes a `$lake` table that reads the tiered Paimon data; querying the table without the suffix unions the hot Fluss data with it.
+
+The walkthrough below shows this end to end: write once into a datalake-enabled Fluss table, let the tiering service move it to Paimon, then read it back through the hot path and the `$lake` path.
 
 ## Component Versions
 
@@ -56,7 +73,7 @@ The demo runs on the official Apache Fluss 0.9.1 images (`apache/fluss` and `apa
 
 ## Prerequisites
 
-- Docker Engine 20.10+ with Compose V2
+- Docker Engine 24+ with Compose v2 (the demo was tested on Docker 29 and Compose v2)
 - Around 4 GB of free memory (the JVMs are the main consumers)
 - Ports 3000, 8083, 9000, 9001, 9090, 9249 and 9250 available on localhost
 
