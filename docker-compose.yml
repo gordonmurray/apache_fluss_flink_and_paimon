@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
 
   coordinator-server:
-    image: fluss/fluss:0.7.0
+    image: apache/fluss:0.9.1-incubating
     container_name: fluss-coordinator
     command: coordinatorServer
     depends_on:
@@ -55,7 +55,7 @@ services:
         metrics.reporter.prometheus.port: 9249
 
   tablet-server:
-    image: fluss/fluss:0.7.0
+    image: apache/fluss:0.9.1-incubating
     container_name: fluss-tablet
     command: tabletServer
     depends_on:
