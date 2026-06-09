@@ -26,3 +26,15 @@ scrape_configs:
     static_configs:
       - targets: ['taskmanager:9249']
     scrape_interval: 30s
+
+  # Fluss coordinator metrics
+  - job_name: 'fluss-coordinator'
+    static_configs:
+      - targets: ['coordinator-server:9249']
+    scrape_interval: 30s
+
+  # Fluss tablet server metrics
+  - job_name: 'fluss-tablet'
+    static_configs:
+      - targets: ['tablet-server:9249']
+    scrape_interval: 30s
