@@ -1,0 +1,24 @@
+# Fluss server image with the Paimon S3 filesystem added.
+#
+# The apache/fluss image ships paimon-bundle and the Hadoop classes but not the
+# Paimon S3 FileIO, so the coordinator cannot reach the s3:// Paimon lake
+# warehouse for datalake tiering. The jar is fetched and checksum-verified in a
+# builder stage that has curl, then copied into the Fluss Paimon plugin dir.
+ARG PAIMON_VERSION=1.3.1
+ARG MAVEN_BASE=https://repo1.maven.org/maven2
+ARG PAIMON_S3_SHA512=79aee3320fc0abe98a4187d948868219ad9d1530e0e46ed11b2c1e57c7b1272c3bbc9a9a7152b417d1a7f471af3d2565c0ecca4a8cbea298519236548f9c4e00
+
+FROM apache/fluss-quickstart-flink:1.20-0.9.1-incubating AS jars
+ARG PAIMON_VERSION
+ARG MAVEN_BASE
+ARG PAIMON_S3_SHA512
+RUN set -eux; \
+    cd /tmp; \
+    curl -fL --retry 3 --retry-delay 2 -o paimon-s3-${PAIMON_VERSION}.jar \
+      ${MAVEN_BASE}/org/apache/paimon/paimon-s3/${PAIMON_VERSION}/paimon-s3-${PAIMON_VERSION}.jar; \
+    printf '%s  %s\n' "${PAIMON_S3_SHA512}" "paimon-s3-${PAIMON_VERSION}.jar" > paimon-s3.sha512; \
+    sha512sum -c paimon-s3.sha512
+
+FROM apache/fluss:0.9.1-incubating
+ARG PAIMON_VERSION
+COPY --from=jars /tmp/paimon-s3-${PAIMON_VERSION}.jar /opt/fluss/plugins/paimon/paimon-s3-${PAIMON_VERSION}.jar

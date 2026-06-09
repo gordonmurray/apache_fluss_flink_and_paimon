@@ -45,7 +45,7 @@ A self-contained Docker Compose environment for learning how Apache Fluss, Apach
 |------------|---------|------|
 | Fluss      | 0.9.1-incubating | Stream-batch unified storage with primary-key tables |
 | Flink      | 1.20    | SQL and stream/batch processing engine |
-| Paimon     | 1.2.0   | Data lake table format (JARs added at build time) |
+| Paimon     | 1.3.1   | Data lake table format (JARs added at build time) |
 | MinIO      | RELEASE.2025-09-07T16-13-09Z | S3-compatible object storage |
 | MinIO Client (mc) | RELEASE.2025-08-13T08-35-41Z | Creates the S3 buckets on startup |
 | ZooKeeper  | 3.9.2   | Coordination service for Fluss |
@@ -152,69 +152,78 @@ SET 'execution.runtime-mode' = 'batch';
 SELECT * FROM logins WHERE id = '1';
 ```
 
-### 4. Set up the Paimon catalog
+### 4. Start the Lakehouse Tiering Service
 
-Paimon stores its tables as files on S3 (MinIO in this demo):
+Fluss tiers datalake-enabled tables into Paimon through a tiering job that runs on the Flink cluster. Start it once (it keeps running in the background and appears as a job in the Flink Web UI):
 
-```sql
-CREATE CATALOG paimon_catalog WITH (
-  'type' = 'paimon',
-  'warehouse' = 's3://warehouse/',
-  's3.endpoint' = 'http://minio:9000',
-  's3.access-key' = 'admin',
-  's3.secret-key' = 'password123',
-  's3.path-style-access' = 'true'
-);
-
-USE CATALOG paimon_catalog;
+```bash
+docker compose exec jobmanager /opt/flink/bin/flink run -d \
+  /opt/flink/opt/fluss-flink-tiering-0.9.1-incubating.jar \
+  --fluss.bootstrap.servers coordinator-server:9123 \
+  --datalake.format paimon \
+  --datalake.paimon.metastore filesystem \
+  --datalake.paimon.warehouse s3://warehouse/ \
+  --datalake.paimon.s3.endpoint http://minio:9000 \
+  --datalake.paimon.s3.access-key admin \
+  --datalake.paimon.s3.secret-key password123 \
+  --datalake.paimon.s3.path.style.access true
 ```
 
-### 5. Create a Paimon table and load data
+### 5. Create a datalake-enabled table and write once
+
+In the SQL client, create a Fluss table with tiering enabled and insert data once. There is no separate manual insert into Paimon; the tiering service moves the data for you.
 
 ```sql
-CREATE TABLE user_analytics (
+USE CATALOG fluss_catalog;
+
+CREATE TABLE logins_lake (
   id STRING,
   username STRING,
   ts TIMESTAMP(3),
   ip STRING,
   PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+  'table.datalake.enabled' = 'true',
+  'table.datalake.freshness' = '30s'
 );
 
-INSERT INTO user_analytics VALUES
+INSERT INTO logins_lake VALUES
   ('1', 'alice', TIMESTAMP '2025-09-03 09:00:00', '10.0.0.5'),
   ('2', 'bob',   TIMESTAMP '2025-09-03 09:05:00', '10.0.0.8'),
   ('3', 'alice', TIMESTAMP '2025-09-04 09:05:00', '10.0.0.5');
 ```
 
-> **Note:** In this demo the data is inserted manually into both catalogs.
-> In a production setup you would run a Flink streaming job to sync data
-> continuously from Fluss to Paimon.
+### 6. Read the hot path and the lake path
 
-### 6. Run analytics queries on Paimon
+Wait about one `table.datalake.freshness` interval (30s) for the tiering service to commit a Paimon snapshot, then read.
 
-Paimon supports arbitrary filters and aggregations, not just primary-key lookups:
+Hot path, a low-latency Fluss primary-key lookup (a union of the hot Fluss data and the tiered Paimon data):
 
 ```sql
--- Logins per user
-SELECT username, COUNT(*) AS login_count, MAX(ts) AS last_login
-FROM user_analytics
-GROUP BY username;
+SET 'sql-client.execution.result-mode' = 'tableau';
+SET 'execution.runtime-mode' = 'batch';
 
--- Filter by IP
-SELECT * FROM user_analytics WHERE ip = '10.0.0.5';
-
--- Filter by date range
-SELECT * FROM user_analytics WHERE ts >= TIMESTAMP '2025-09-04 00:00:00';
+SELECT * FROM logins_lake WHERE id = '1';
 ```
 
-### 7. Compare query patterns
+Lake path, reading the tiered data straight from Paimon through the `$lake` suffix:
 
-| Query type | Fluss | Paimon |
+```sql
+SELECT * FROM logins_lake$lake ORDER BY id;
+```
+
+The `$lake` rows carry Paimon's tiering columns (`__bucket`, `__offset`, `__timestamp`). You can also point a Paimon catalog at `s3://warehouse/` and read the tiered table directly as `fluss.logins_lake`.
+
+### 7. Why Fluss is the hot path and Paimon is the lake path
+
+| Query type | Fluss (hot) | Paimon (lake, via `$lake`) |
 |---|---|---|
 | Lookup by primary key | Fast | Supported |
 | Filter on non-key columns | Not supported in batch mode | Fast |
 | Aggregations / GROUP BY | Not supported in batch mode | Fast |
-| Real-time upserts | Fast | Supported (via compaction) |
+| Storage | Sub-second, local | Columnar files on S3, cheap to scan |
+
+Fluss serves fresh primary-key reads and writes; the same rows land in Paimon as columnar snapshots on object storage for scans and analytics, populated automatically by tiering rather than a second manual insert.
 
 ## Monitoring
 
@@ -250,7 +259,8 @@ Grafana ships with three pre-provisioned dashboards:
 │           ├── dashboards/          # Grafana dashboard JSON files
 │           └── datasources/         # Prometheus datasource config
 ├── docker-compose.yml               # All services
-├── Dockerfile                       # Flink image with Paimon and Hadoop JARs
+├── Dockerfile                       # Flink image with Paimon, Hadoop, and Fluss lake JARs
+├── Dockerfile.fluss                 # Fluss server image with the Paimon S3 filesystem
 └── README.md
 ```
 
